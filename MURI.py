@@ -1,6 +1,6 @@
 #!/usr/bin/env python2.7
 # -*- coding: utf-8 -*-
-# @Time    : 1/22/2018 3:38 PM
+# @Time    : 
 # @Author  : Ann
 # @Site    :
 # @File    : MURI.py
