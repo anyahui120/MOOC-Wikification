@@ -11,6 +11,74 @@ import re
 import sqlite3
 
 
+class CreateResourceTable(object):
+    """This class is used for collecting all the information of resource items into one ceremonial table named "resource"
+    For this table, every item will have a anonymous ID to easy for searching.
+
+    """
+    def __init__(self, db_path, db_name):
+        """ Open the resource database.
+
+        @:param db_path: The path of the MOOCDB.db database. C:/Users/anyah/OneDrive/Wikifier-master/Wikifier-master/server-master/
+        @:param db_name: MOOCDB.db
+        """
+        self.conn_resource = sqlite3.connect(db_path+db_name)
+        self.c_resource = self.conn_resource.cursor()
+
+    def main(self):
+        """Workflow of integrating resource table.
+
+        :return: 1
+        """
+        self.c_resource.execute('drop table if EXISTS resource')
+        self.c_resource.execute('CREATE TABLE "resource" ( `itemId` TEXT, `courseId` TEXT, `coursename` TEXT, '
+                                '`instructors` TEXT, `session` TEXT, `resourcename` TEXT, `resourcetype` TEXT, '
+                                '`actual_url` TEXT, `standard_url` TEXT, `platform` TEXT )')
+        self.conn_resource.commit()
+
+        self.c_resource.execute('insert or ignore into '
+                                'resource(itemId, coursename, resourcename, resourcetype, actual_url, standard_url) '
+                                'select itemId, courseNameSlug, slug, typeName, actualURL, standard_URL from resource_item ')
+        coursenames = self.c_resource.execute('select DISTINCT coursename from resource').fetchall()
+        for course in coursenames:
+            coursename = course[0]
+            courseId = self.c_resource.execute('select DISTINCT courseId from course where courseNameSlug = (?)', (coursename,)).fetchone()[0]
+            self.c_resource.execute('update or ignore resource SET courseId=(?)  where coursename = (?)', (courseId,coursename,))
+        course_ids = self.c_resource.execute('select DISTINCT courseId from resource').fetchall()
+        for course in course_ids:
+            course_id = course[0]
+            instructors = self.c_resource.execute('select DISTINCT fullName from instructor where courseId = (?)', (course_id,)).fetchall()
+            if len(instructors) == 1:
+                for instructor in instructors:
+                    instructor_string = instructor[0]
+            elif len(instructors) == 2:
+                instructor_string = instructors[0][0] + '&' + instructors[1][0]
+            elif len(instructors) > 2:
+                print len(instructors)
+                instructor_string = ''
+                for i in xrange(len(instructors)-1):
+                    instructor_string += instructors[i][0] + '&'
+                instructor_string += instructors[len(instructors)-1][0]
+            else:
+                instructor_string = ''
+                print "We can't find instructor for this course."
+            session = self.c_resource.execute('select DISTINCT startedAt from session where courseId = (?)', (course_id,)).fetchone()[0]
+            self.c_resource.execute('update or ignore resource SET instructors=(?)  where courseId = (?)', (instructor_string, courseId, ))
+            self.c_resource.execute('update or ignore resource SET `session`=(?)  where courseId = (?)', (session, course_id, ))
+
+        self.c_resource.execute("update or ignore resource set platform = 'Coursera'")
+        item_ids = self.c_resource.execute('select itemId from resource').fetchall()
+        count = 0
+        for item_id in item_ids:
+            count += 1
+            print count
+            self.c_resource.execute(
+                "update or ignore resource set standard_url = (select 'http://www.wing.comp.nus.edu.sg/'||platform||'/'||coursename||'/'||`session`||'/'||instructors||'/'||resourcetype||'/'||resourcename from resource where itemId = (?)) where itemId = (?)", (item_id[0], item_id[0], ))
+        self.conn_resource.commit()
+        self.conn_resource.close()
+        return 1
+    
+    
 class CreatePostTable(object):
     """This class is used for collecting posts data from original crawled data.
 
